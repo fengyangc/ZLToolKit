@@ -35,7 +35,9 @@
 #include <sstream>
 #include <iostream>
 #include <stdexcept>
+#include <algorithm>
 #include "Util/logger.h"
+#include "Util/util.h"
 
 #if defined(_WIN32)
 #include <mysql.h>
@@ -245,10 +247,43 @@ private:
 	}
 
 	int doQuery(const string &sql){
-		return mysql_query(&_sql,sql.data());
+		if (count(sql.begin(),sql.end(),';') > 1) {
+			int result;
+			vector<string> sql_vec;
+			mysql_autocommit(&_sql,0);
+			for (const auto &sql_s : toolkit::split(sql, ";")) {
+				result = mysql_query(&_sql, (sql_s + ";").data());
+				if (result) {
+					mysql_rollback(&_sql);
+					break;
+				}
+			}
+			mysql_commit(&_sql);
+			mysql_autocommit(&_sql,1);
+			return result;
+		} else {
+			return mysql_query(&_sql,sql.data());
+		}
 	}
 	int doQuery(const char *sql){
-		return mysql_query(&_sql,sql);
+		string new_sql = sql;
+		if (count(new_sql.begin(),new_sql.end(),';') > 1) {
+			int result;
+			vector<string> sql_vec;
+			mysql_autocommit(&_sql,0);
+			for (const auto &sql_s : toolkit::split(sql, ";")) {
+				result = mysql_query(&_sql, (sql_s + ";").data());
+				if (result) {
+					mysql_rollback(&_sql);
+					break;
+				}
+			}
+			mysql_commit(&_sql);
+			mysql_autocommit(&_sql,1);
+			return result;
+		} else {
+			return mysql_query(&_sql,sql);
+		}
 	}
 private:
 	MYSQL _sql;
